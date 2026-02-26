@@ -27,7 +27,7 @@ class Win95Paint:
         # Identity & settings
         self.settings_file = "user_settings.json"
         self.username = self.load_username()
-        self.webhook_url = self.load_webhook()
+        self.proxy_url = self.load_proxy_url()
 
         # State
         self.active_tool = "pencil"
@@ -98,28 +98,28 @@ class Win95Paint:
     def config_file(self):
         return os.path.join(self.config_dir(), "config.json")
 
-    def load_webhook(self):
-        env = os.environ.get("PAINT_WEBHOOK_URL", "").strip()
+    def load_proxy_url(self):
+        env = os.environ.get("PAINT_PROXY_URL", "").strip()
         if env:
-            self.save_webhook(env)
+            self.save_proxy_url(env)
             return env
         path = self.config_file()
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:
-                    return json.load(f).get("webhook_url", "").strip()
+                    return json.load(f).get("proxy_url", "").strip()
             except Exception:
                 return ""
         return ""
 
-    def save_webhook(self, url):
+    def save_proxy_url(self, url):
         url = (url or "").strip()
         if not url:
             return
         os.makedirs(self.config_dir(), exist_ok=True)
         with open(self.config_file(), "w") as f:
-            json.dump({"webhook_url": url}, f)
-        self.webhook_url = url
+            json.dump({"proxy_url": url}, f)
+        self.proxy_url = url
 
     def ask_for_username(self):
         self.user_win = tk.Toplevel(self.root)
@@ -264,7 +264,7 @@ class Win95Paint:
         menubar.add_cascade(label="View", menu=view_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="Set Webhook...", command=self.set_webhook_dialog)
+        help_menu.add_command(label="Set Rating Proxy...", command=self.set_proxy_dialog)
         help_menu.add_command(label="Rate App", command=self.open_rating_window)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Win7 Paint Remake"))
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -1184,11 +1184,11 @@ class Win95Paint:
         self.set_tool("select_webhook")
         messagebox.showinfo("Select", "Drag a red box around your drawing to attach it.")
 
-    def set_webhook_dialog(self):
-        url = simpledialog.askstring("Webhook", "Discord Webhook URL:", initialvalue=self.webhook_url or "")
+    def set_proxy_dialog(self):
+        url = simpledialog.askstring("Rating Proxy", "Proxy URL (e.g. http://127.0.0.1:5000):", initialvalue=self.proxy_url or "")
         if url:
-            self.save_webhook(url)
-            messagebox.showinfo("Saved", "Webhook saved locally.")
+            self.save_proxy_url(url)
+            messagebox.showinfo("Saved", "Proxy URL saved locally.")
             return True
         return False
 
@@ -1207,14 +1207,14 @@ class Win95Paint:
         self.send_to_discord(path)
 
     def send_to_discord(self, filepath=None):
-        url = os.environ.get("PAINT_WEBHOOK_URL", "").strip() or self.webhook_url
-        if not url:
-            if not self.set_webhook_dialog():
-                messagebox.showerror("Webhook Missing", "Set a webhook to send reviews.")
+        proxy = os.environ.get("PAINT_PROXY_URL", "").strip() or self.proxy_url
+        if not proxy:
+            if not self.set_proxy_dialog():
+                messagebox.showerror("Proxy Missing", "Set a rating proxy to send reviews.")
                 if self.rate_win:
                     self.rate_win.deiconify()
                 return
-            url = self.webhook_url
+            proxy = self.proxy_url
         data = {
             "embeds": [
                 {
@@ -1232,10 +1232,10 @@ class Win95Paint:
         try:
             if filepath:
                 with open(filepath, "rb") as f:
-                    requests.post(url, data={"payload_json": json.dumps(data)}, files={"file": f})
+                    requests.post(f\"{proxy.rstrip('/')}/rate\", data={\"payload_json\": json.dumps(data)}, files={\"file\": f})
                 os.remove(filepath)
             else:
-                requests.post(url, json=data)
+                requests.post(f\"{proxy.rstrip('/')}/rate\", json=data)
             messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
             self.rate_win.destroy()
         except Exception:

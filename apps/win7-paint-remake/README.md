@@ -4,7 +4,7 @@ A Windows 7–style Paint remake with:
 - Tools, shapes, brushes, selection, crop, resize/skew, rotate/flip
 - Zoom + status bar
 - Auto‑draw window
-- Rating window with Discord webhook
+- Rating window with Discord webhook (via proxy)
 
 ## Requirements
 - Linux (works on Chromebook Linux too)
@@ -16,7 +16,7 @@ sudo apt update
 sudo apt install python3-tk python3-pip -y
 ```
 
-### Python packages
+### Python packages (app)
 ```bash
 pip3 install opencv-python-headless Pillow requests numpy --break-system-packages
 ```
@@ -26,32 +26,34 @@ pip3 install opencv-python-headless Pillow requests numpy --break-system-package
 python3 paint.py
 ```
 
-## Discord Webhook (for ratings)
-The webhook URL is **not** stored in code. It’s saved locally on first use.
+## Rating Proxy (required to send ratings)
+The Discord webhook is **not** stored in the app. Use the included proxy server.
 
-### Option A: one‑time setup (recommended)
+### 1) Start the proxy
 ```bash
-export PAINT_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+cd proxy
+pip3 install -r requirements.txt --break-system-packages
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+python3 server.py
+```
+
+By default the proxy runs at `http://127.0.0.1:5000`.
+
+### 2) Point the app to the proxy
+Option A (recommended, one‑time setup):
+```bash
+export PAINT_PROXY_URL="http://127.0.0.1:5000"
 python3 paint.py
 ```
-- The app will save it to: `~/.config/win7-paint-remake/config.json`
+The app will save it to: `~/.config/win7-paint-remake/config.json`
 
-### Option B: set it manually in the local config
-```bash
-python3 - <<'PY'
-import json, os
-p = os.path.expanduser("~/.config/win7-paint-remake")
-os.makedirs(p, exist_ok=True)
-with open(os.path.join(p, "config.json"), "w") as f:
-    json.dump({"webhook_url": "https://discord.com/api/webhooks/..."}, f)
-print("Saved.")
-PY
-```
+Option B (set inside the app):
+- `Help -> Set Rating Proxy...`
 
 ## How to use
 - **Tools** are in the menu bar: `Tools`, `Image`, and `Colors`.
 - **Rate App** is in `Help -> Rate App`.
-- **Set Webhook** is in `Help -> Set Webhook...`.
+- **Set Rating Proxy** is in `Help -> Set Rating Proxy...`.
 - **Auto Draw** is in `View -> Auto Draw Settings`.
 - **Custom file manager** is in `View -> Open File Manager`.
 
