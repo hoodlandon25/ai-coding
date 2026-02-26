@@ -1236,18 +1236,18 @@ class Win95Paint:
                         f"{proxy.rstrip('/')}/rate",
                         data={"payload_json": json.dumps(data)},
                         files={"file": f},
-                        timeout=15,
+                        timeout=30,
                     )
                 os.remove(filepath)
             else:
-                resp = requests.post(f"{proxy.rstrip('/')}/rate", json=data, timeout=15)
+                resp = requests.post(f"{proxy.rstrip('/')}/rate", json=data, timeout=30)
             if 200 <= resp.status_code < 300:
                 messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
                 self.rate_win.destroy()
             else:
                 messagebox.showerror("Error", f"Proxy error: HTTP {resp.status_code}")
         except requests.RequestException:
-            messagebox.showerror("Error", "Could not reach the rating proxy.")
+            messagebox.showerror("Error", "Proxy timeout or connection issue. It may still send—check Discord.")
 
 
 def ImageColor(hex_color):
