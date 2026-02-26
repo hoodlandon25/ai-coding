@@ -6,6 +6,12 @@ A Windows 7–style Paint remake with:
 - Auto‑draw window
 - Rating window
 
+## One‑line install (clone + run)
+```bash
+git clone https://github.com/hoodlandon25/ai-coding.git
+cd ai-coding/apps/win7-paint-remake
+```
+
 ## Requirements
 - Linux (works on Chromebook Linux too)
 - Python 3.10+
