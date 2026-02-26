@@ -26,20 +26,34 @@ pip3 install opencv-python-headless Pillow requests numpy --break-system-package
 python3 paint.py
 ```
 
-## Discord Webhook (required to send ratings)
-The webhook URL is **not** in the code. You must set it in your shell before running.
+## Discord Webhook (for ratings)
+The webhook URL is **not** stored in code. It’s saved locally on first use.
 
+### Option A: one‑time setup (recommended)
 ```bash
 export PAINT_WEBHOOK_URL="https://discord.com/api/webhooks/..."
 python3 paint.py
+```
+- The app will save it to: `~/.config/win7-paint-remake/config.json`
+
+### Option B: set it manually in the local config
+```bash
+python3 - <<'PY'
+import json, os
+p = os.path.expanduser("~/.config/win7-paint-remake")
+os.makedirs(p, exist_ok=True)
+with open(os.path.join(p, "config.json"), "w") as f:
+    json.dump({"webhook_url": "https://discord.com/api/webhooks/..."}, f)
+print("Saved.")
+PY
 ```
 
 ## How to use
 - **Tools** are in the menu bar: `Tools`, `Image`, and `Colors`.
 - **Rate App** is in `Help -> Rate App`.
+- **Set Webhook** is in `Help -> Set Webhook...`.
 - **Auto Draw** is in `View -> Auto Draw Settings`.
 - **Custom file manager** is in `View -> Open File Manager`.
 
 ## Notes
-- Right‑click a palette color (if you add palette UI later) to set Color 2.
 - For best performance, keep zoom at 100% while drawing.

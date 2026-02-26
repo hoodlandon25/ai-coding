@@ -27,6 +27,7 @@ class Win95Paint:
         # Identity & settings
         self.settings_file = "user_settings.json"
         self.username = self.load_username()
+        self.webhook_url = self.load_webhook()
 
         # State
         self.active_tool = "pencil"
@@ -90,6 +91,35 @@ class Win95Paint:
             except Exception:
                 return None
         return None
+
+    def config_dir(self):
+        return os.path.join(os.path.expanduser("~"), ".config", "win7-paint-remake")
+
+    def config_file(self):
+        return os.path.join(self.config_dir(), "config.json")
+
+    def load_webhook(self):
+        env = os.environ.get("PAINT_WEBHOOK_URL", "").strip()
+        if env:
+            self.save_webhook(env)
+            return env
+        path = self.config_file()
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    return json.load(f).get("webhook_url", "").strip()
+            except Exception:
+                return ""
+        return ""
+
+    def save_webhook(self, url):
+        url = (url or "").strip()
+        if not url:
+            return
+        os.makedirs(self.config_dir(), exist_ok=True)
+        with open(self.config_file(), "w") as f:
+            json.dump({"webhook_url": url}, f)
+        self.webhook_url = url
 
     def ask_for_username(self):
         self.user_win = tk.Toplevel(self.root)
@@ -234,6 +264,7 @@ class Win95Paint:
         menubar.add_cascade(label="View", menu=view_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Set Webhook...", command=self.set_webhook_dialog)
         help_menu.add_command(label="Rate App", command=self.open_rating_window)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About", "Win7 Paint Remake"))
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -1153,6 +1184,14 @@ class Win95Paint:
         self.set_tool("select_webhook")
         messagebox.showinfo("Select", "Drag a red box around your drawing to attach it.")
 
+    def set_webhook_dialog(self):
+        url = simpledialog.askstring("Webhook", "Discord Webhook URL:", initialvalue=self.webhook_url or "")
+        if url:
+            self.save_webhook(url)
+            messagebox.showinfo("Saved", "Webhook saved locally.")
+            return True
+        return False
+
     def save_selection_and_send(self, x1, y1, x2, y2):
         x1 = max(0, min(self.canvas_width, int(x1)))
         y1 = max(0, min(self.canvas_height, int(y1)))
@@ -1168,12 +1207,14 @@ class Win95Paint:
         self.send_to_discord(path)
 
     def send_to_discord(self, filepath=None):
-        url = os.environ.get("PAINT_WEBHOOK_URL", "").strip()
+        url = os.environ.get("PAINT_WEBHOOK_URL", "").strip() or self.webhook_url
         if not url:
-            messagebox.showerror("Webhook Missing", "Set PAINT_WEBHOOK_URL in your environment to send reviews.")
-            if self.rate_win:
-                self.rate_win.deiconify()
-            return
+            if not self.set_webhook_dialog():
+                messagebox.showerror("Webhook Missing", "Set a webhook to send reviews.")
+                if self.rate_win:
+                    self.rate_win.deiconify()
+                return
+            url = self.webhook_url
         data = {
             "embeds": [
                 {
