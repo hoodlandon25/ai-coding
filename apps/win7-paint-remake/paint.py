@@ -1232,14 +1232,22 @@ class Win95Paint:
         try:
             if filepath:
                 with open(filepath, "rb") as f:
-                    requests.post(f\"{proxy.rstrip('/')}/rate\", data={\"payload_json\": json.dumps(data)}, files={\"file\": f})
+                    resp = requests.post(
+                        f"{proxy.rstrip('/')}/rate",
+                        data={"payload_json": json.dumps(data)},
+                        files={"file": f},
+                        timeout=15,
+                    )
                 os.remove(filepath)
             else:
-                requests.post(f\"{proxy.rstrip('/')}/rate\", json=data)
-            messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
-            self.rate_win.destroy()
-        except Exception:
-            messagebox.showerror("Error", "Could not reach Discord.")
+                resp = requests.post(f"{proxy.rstrip('/')}/rate", json=data, timeout=15)
+            if 200 <= resp.status_code < 300:
+                messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
+                self.rate_win.destroy()
+            else:
+                messagebox.showerror("Error", f"Proxy error: HTTP {resp.status_code}")
+        except requests.RequestException:
+            messagebox.showerror("Error", "Could not reach the rating proxy.")
 
 
 def ImageColor(hex_color):
