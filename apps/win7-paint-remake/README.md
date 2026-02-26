@@ -4,7 +4,7 @@ A Windows 7–style Paint remake with:
 - Tools, shapes, brushes, selection, crop, resize/skew, rotate/flip
 - Zoom + status bar
 - Auto‑draw window
-- Rating window with Discord webhook (via proxy)
+- Rating window
 
 ## Requirements
 - Linux (works on Chromebook Linux too)
