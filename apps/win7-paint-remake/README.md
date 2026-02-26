@@ -33,33 +33,26 @@ python3 paint.py
 ```
 
 ## Rating Proxy (required to send ratings)
-The Discord webhook is **not** stored in the app. Use the included proxy server.
+The app is preconfigured to use your hosted proxy:
 
-### 1) Start the proxy locally
+`https://ai-coding-1-yo17.onrender.com`
+
+If you ever need to override it (not required for users):
 ```bash
-cd proxy
-pip3 install -r requirements.txt --break-system-packages
-export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
-python3 server.py
+export PAINT_PROXY_URL="https://ai-coding-1-yo17.onrender.com"
+python3 paint.py
 ```
 
-### 2) Or host it for free on Render
-Render Web Service settings:
+## Hosting the proxy (owner only)
+The Discord webhook is **not** stored in the app. The proxy is hosted on Render.
+
+Proxy repo path: `apps/win7-paint-remake/proxy`
+
+Render settings:
 - Root Directory: `apps/win7-paint-remake/proxy`
 - Build Command: `pip install -r requirements.txt`
 - Start Command: `gunicorn server:app`
 - Env Var: `DISCORD_WEBHOOK_URL` = your Discord webhook
-
-### 3) Point the app to the proxy
-Option A (recommended, one‑time setup):
-```bash
-export PAINT_PROXY_URL="http://127.0.0.1:5000"
-python3 paint.py
-```
-The app will save it to: `~/.config/win7-paint-remake/config.json`
-
-Option B (set inside the app):
-- `Help -> Set Rating Proxy...`
 
 ## How to use
 - **Tools** are in the menu bar: `Tools`, `Image`, and `Colors`.

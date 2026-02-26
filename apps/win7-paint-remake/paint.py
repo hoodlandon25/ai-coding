@@ -27,7 +27,7 @@ class Win95Paint:
         # Identity & settings
         self.settings_file = "user_settings.json"
         self.username = self.load_username()
-        self.proxy_url = self.load_proxy_url()
+        self.proxy_url = self.load_proxy_url() or "https://ai-coding-1-yo17.onrender.com"
 
         # State
         self.active_tool = "pencil"
