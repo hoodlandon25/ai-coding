@@ -1229,25 +1229,38 @@ class Win95Paint:
                 }
             ]
         }
-        try:
+        def do_post():
             if filepath:
                 with open(filepath, "rb") as f:
-                    resp = requests.post(
+                    return requests.post(
                         f"{proxy.rstrip('/')}/rate",
                         data={"payload_json": json.dumps(data)},
                         files={"file": f},
-                        timeout=30,
+                        timeout=45,
                     )
-                os.remove(filepath)
-            else:
-                resp = requests.post(f"{proxy.rstrip('/')}/rate", json=data, timeout=30)
-            if 200 <= resp.status_code < 300:
-                messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
-                self.rate_win.destroy()
-            else:
-                messagebox.showerror("Error", f"Proxy error: HTTP {resp.status_code}")
+            return requests.post(f"{proxy.rstrip('/')}/rate", json=data, timeout=45)
+
+        resp = None
+        try:
+            resp = do_post()
         except requests.RequestException:
-            messagebox.showerror("Error", "Proxy timeout or connection issue. It may still send—check Discord.")
+            time.sleep(1.0)
+            try:
+                resp = do_post()
+            except requests.RequestException:
+                resp = None
+
+        if filepath and os.path.exists(filepath):
+            os.remove(filepath)
+
+        if resp is None:
+            messagebox.showinfo("Sent (Unconfirmed)", "Proxy timeout—your review may still have been sent. Check Discord.")
+            return
+        if 200 <= resp.status_code < 300:
+            messagebox.showinfo("Sent", f"Feedback received! Thanks, {self.username}")
+            self.rate_win.destroy()
+        else:
+            messagebox.showerror("Error", f"Proxy error: HTTP {resp.status_code}")
 
 
 def ImageColor(hex_color):
