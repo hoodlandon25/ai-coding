@@ -47,6 +47,7 @@ const youtubeEmbedLastApplied = new Map();
 const drawingContexts = new Map();
 const windowPointerNodes = new Map();
 const dinoRuntime = new Map();
+const localWindowInteractions = new Map();
 const pendingEditRequests = new Map();
 const miniChatRenderers = new Map();
 const mainChatRenderers = new Map();
@@ -1451,6 +1452,24 @@ function setWindowState(windowState) {
   }
 }
 
+function markWindowInteraction(windowId, type, active) {
+  const existing = localWindowInteractions.get(windowId) || {
+    dragging: false,
+    resizing: false,
+    updatedAt: 0,
+  };
+  existing[type] = active;
+  existing.updatedAt = Date.now();
+  localWindowInteractions.set(windowId, existing);
+}
+
+function isWindowInteractionActive(windowId) {
+  const info = localWindowInteractions.get(windowId);
+  if (!info) return false;
+  if (info.dragging || info.resizing) return true;
+  return Date.now() - (info.updatedAt || 0) < 180;
+}
+
 function removeWindow(windowId) {
   removeWindowRequests(windowId);
   renderRequestNotifications();
@@ -1563,12 +1582,15 @@ function setupDrag(root, handle, windowId) {
   handle.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    markWindowInteraction(windowId, 'dragging', true);
 
     const rect = root.getBoundingClientRect();
     const dragState = {
       dx: event.clientX - rect.left,
       dy: event.clientY - rect.top,
     };
+    let lastEmitAt = 0;
+    let pendingWorld = null;
 
     const onMove = (moveEvent) => {
       const wsRect = workspaceEl.getBoundingClientRect();
@@ -1578,10 +1600,25 @@ function setupDrag(root, handle, windowId) {
 
       root.style.left = `${Math.round(screenX)}px`;
       root.style.top = `${Math.round(screenY)}px`;
-      socket.emit('window_update', { windowId, x: world.x, y: world.y });
+      const state = windows.get(windowId);
+      if (state) {
+        state.x = Math.round(world.x);
+        state.y = Math.round(world.y);
+      }
+
+      pendingWorld = { x: Math.round(world.x), y: Math.round(world.y) };
+      const now = Date.now();
+      if (now - lastEmitAt >= 34) {
+        lastEmitAt = now;
+        socket.emit('window_update', { windowId, x: pendingWorld.x, y: pendingWorld.y });
+      }
     };
 
     const onUp = () => {
+      markWindowInteraction(windowId, 'dragging', false);
+      if (pendingWorld) {
+        socket.emit('window_update', { windowId, x: pendingWorld.x, y: pendingWorld.y });
+      }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
@@ -1595,6 +1632,7 @@ function setupResize(root, handle, windowId) {
   handle.addEventListener('mousedown', (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    markWindowInteraction(windowId, 'resizing', true);
 
     const rect = root.getBoundingClientRect();
     const resizeState = {
@@ -1603,16 +1641,33 @@ function setupResize(root, handle, windowId) {
       startW: rect.width,
       startH: rect.height,
     };
+    let lastEmitAt = 0;
+    let pendingSize = null;
 
     const onMove = (moveEvent) => {
       const width = Math.max(280, resizeState.startW + (moveEvent.clientX - resizeState.startX));
       const height = Math.max(200, resizeState.startH + (moveEvent.clientY - resizeState.startY));
       root.style.width = `${Math.round(width)}px`;
       root.style.height = `${Math.round(height)}px`;
-      socket.emit('window_update', { windowId, width, height });
+      const state = windows.get(windowId);
+      if (state) {
+        state.width = Math.round(width);
+        state.height = Math.round(height);
+      }
+
+      pendingSize = { width: Math.round(width), height: Math.round(height) };
+      const now = Date.now();
+      if (now - lastEmitAt >= 34) {
+        lastEmitAt = now;
+        socket.emit('window_update', { windowId, width: pendingSize.width, height: pendingSize.height });
+      }
     };
 
     const onUp = () => {
+      markWindowInteraction(windowId, 'resizing', false);
+      if (pendingSize) {
+        socket.emit('window_update', { windowId, width: pendingSize.width, height: pendingSize.height });
+      }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
@@ -3245,8 +3300,7 @@ function setupSocketHandlers() {
       const dx = safeIncomingX - pointerState.worldX;
       const dy = safeIncomingY - pointerState.worldY;
       const delta = Math.hypot(dx, dy);
-      const authoritativeSync = avatarControl.enabled
-        || merged.state === 'bump'
+      const authoritativeSync = merged.state === 'bump'
         || merged.state === 'sitting'
         || merged.state === 'jumping'
         || Boolean(merged.onHeadOf)
@@ -3317,9 +3371,26 @@ function setupSocketHandlers() {
 
   socket.on('window_updated', ({ window }) => {
     const existingNode = windowNodes.get(window.id);
-    setWindowState(window);
-    if (existingNode) applyWindowBaseStyles(existingNode, window);
-    else renderWindow(window.id, window);
+    const current = windows.get(window.id);
+    const ignoreGeometry = Boolean(
+      current
+      && current.ownerId === session.selfId
+      && isWindowInteractionActive(window.id)
+    );
+
+    const nextWindow = ignoreGeometry && current
+      ? {
+          ...window,
+          x: current.x,
+          y: current.y,
+          width: current.width,
+          height: current.height,
+        }
+      : window;
+
+    setWindowState(nextWindow);
+    if (existingNode) applyWindowBaseStyles(existingNode, nextWindow);
+    else renderWindow(window.id, nextWindow);
   });
 
   socket.on('window_removed', ({ windowId }) => {
