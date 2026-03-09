@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "jimp": "^1.6.0",
+    "png-to-ico": "^3.0.1",
     "socket.io": "^4.8.1"
   }
 }
