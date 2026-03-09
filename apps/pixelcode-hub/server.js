@@ -246,6 +246,7 @@ function createWindowState({ lobbyState, ownerId, ownerName, type, x, y, width, 
     chatLog: [],
     modLog: [],
     snapshots: [],
+    updatedAt: Date.now(),
   };
 }
 
@@ -273,6 +274,7 @@ function serializeWindow(windowState) {
     chatLog: windowState.chatLog,
     modLog: windowState.modLog,
     snapshots: windowState.snapshots,
+    updatedAt: windowState.updatedAt || 0,
   };
 }
 
@@ -799,7 +801,7 @@ io.on('connection', (socket) => {
     if (user.sittingOnChair) {
       user.gesture = 'none';
       user.updatedAt = Date.now();
-      io.to(lobbyId).emit('cursor_update', {
+      const cursorPayload = {
         id: socket.id,
         x: user.x,
         y: user.y,
@@ -816,7 +818,9 @@ io.on('connection', (socket) => {
         speechUntil: user.speechUntil,
         sittingOnChair: user.sittingOnChair,
         updatedAt: user.updatedAt,
-      });
+      };
+      socket.to(lobbyId).emit('cursor_update', cursorPayload);
+      socket.emit('cursor_update', cursorPayload);
       return;
     }
 
@@ -912,7 +916,7 @@ io.on('connection', (socket) => {
     }
     user.updatedAt = Date.now();
 
-    io.to(lobbyId).emit('cursor_update', {
+    const cursorPayload = {
       id: socket.id,
       x: user.x,
       y: user.y,
@@ -929,7 +933,20 @@ io.on('connection', (socket) => {
       speechUntil: user.speechUntil,
       sittingOnChair: user.sittingOnChair,
       updatedAt: user.updatedAt,
-    });
+    };
+    socket.to(lobbyId).emit('cursor_update', cursorPayload);
+
+    const requestedX = Math.round(x);
+    const requestedY = Math.round(y);
+    const correctedForSelf = user.x !== requestedX
+      || user.y !== requestedY
+      || collided
+      || Boolean(user.onHeadOf)
+      || user.state === 'bump'
+      || user.state === 'sitting';
+    if (correctedForSelf) {
+      socket.emit('cursor_update', cursorPayload);
+    }
 
     const deltaX = user.x - prevX;
     const deltaY = user.y - prevY;
@@ -1343,6 +1360,7 @@ io.on('connection', (socket) => {
     if (Number.isFinite(payload.width)) windowState.width = Math.max(280, Math.round(payload.width));
     if (Number.isFinite(payload.height)) windowState.height = Math.max(200, Math.round(payload.height));
     if (Number.isFinite(payload.zIndex)) windowState.zIndex = Math.max(1, Math.round(payload.zIndex));
+    windowState.updatedAt = Date.now();
 
     broadcastWindowState(lobbyId, windowState, 'window_updated');
     if (typeof ack === 'function') ack({ ok: true });

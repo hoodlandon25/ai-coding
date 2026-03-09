@@ -1604,6 +1604,7 @@ function setupDrag(root, handle, windowId) {
       if (state) {
         state.x = Math.round(world.x);
         state.y = Math.round(world.y);
+        state.updatedAt = Date.now();
       }
 
       pendingWorld = { x: Math.round(world.x), y: Math.round(world.y) };
@@ -1653,6 +1654,7 @@ function setupResize(root, handle, windowId) {
       if (state) {
         state.width = Math.round(width);
         state.height = Math.round(height);
+        state.updatedAt = Date.now();
       }
 
       pendingSize = { width: Math.round(width), height: Math.round(height) };
@@ -3372,6 +3374,13 @@ function setupSocketHandlers() {
   socket.on('window_updated', ({ window }) => {
     const existingNode = windowNodes.get(window.id);
     const current = windows.get(window.id);
+    if (current) {
+      const incomingUpdatedAt = Number(window.updatedAt) || 0;
+      const currentUpdatedAt = Number(current.updatedAt) || 0;
+      if (incomingUpdatedAt && currentUpdatedAt && incomingUpdatedAt < currentUpdatedAt) {
+        return;
+      }
+    }
     const ignoreGeometry = Boolean(
       current
       && current.ownerId === session.selfId
