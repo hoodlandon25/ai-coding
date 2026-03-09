@@ -18,6 +18,8 @@ const windowLayerEl = document.getElementById('windowLayer');
 const lobbyLabelEl = document.getElementById('lobbyLabel');
 const sessionLabelEl = document.getElementById('sessionLabel');
 const usernameInputEl = document.getElementById('usernameInput');
+const passwordInputEl = document.getElementById('passwordInput');
+const memberSignupBtnEl = document.getElementById('memberSignupBtn');
 const memberLoginBtnEl = document.getElementById('memberLoginBtn');
 const guestBtnEl = document.getElementById('guestBtn');
 const categorySelectEl = document.getElementById('categorySelect');
@@ -58,6 +60,7 @@ let chairPromptEl = null;
 const session = {
   username: null,
   isGuest: false,
+  authenticated: false,
   lobbyId: null,
   selfId: null,
   savedProjects: [],
@@ -813,10 +816,10 @@ function updateWindowTypeOptions() {
 function updateSavedProjectsUI() {
   savedProjectSelectEl.innerHTML = '';
 
-  if (session.isGuest) {
+  if (session.isGuest || !session.authenticated) {
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = 'Guest mode: no saved projects';
+    opt.textContent = session.isGuest ? 'Guest mode: no saved projects' : 'Log in to access saved projects';
     savedProjectSelectEl.appendChild(opt);
     savedProjectSelectEl.disabled = true;
     reopenProjectBtnEl.disabled = true;
@@ -1363,57 +1366,75 @@ function setupAuthAndLobbyControls() {
 
   categorySelectEl.addEventListener('change', updateWindowTypeOptions);
 
-  memberLoginBtnEl.addEventListener('click', () => {
+  memberSignupBtnEl.addEventListener('click', () => {
     const raw = usernameInputEl.value.trim();
+    const password = passwordInputEl.value;
     if (!raw) {
-      alert('Enter a username for member mode.');
+      alert('Enter a username.');
+      return;
+    }
+    if (!password || password.length < 4) {
+      alert('Enter a password (at least 4 characters).');
       return;
     }
 
-    session.username = raw.slice(0, 24);
-    session.isGuest = false;
-    sessionLabelEl.textContent = `Member: ${session.username}`;
-    if (session.lobbyId) {
-      socket.emit('auth_update', {
-        username: session.username,
-        isGuest: false,
-      }, (resp) => {
-        if (!resp || !resp.ok) {
-          alert(resp && resp.error ? resp.error : 'Failed to switch account mode.');
-          return;
-        }
-        session.username = resp.username || session.username;
-        session.isGuest = Boolean(resp.isGuest);
-        session.savedProjects = Array.isArray(resp.savedProjects) ? resp.savedProjects : [];
-        sessionLabelEl.textContent = session.isGuest ? `Guest: ${session.username}` : `Member: ${session.username}`;
-        updateSavedProjectsUI();
-      });
-    } else {
+    socket.emit('auth_register', {
+      username: raw.slice(0, 24),
+      password,
+    }, (resp) => {
+      if (!resp || !resp.ok) {
+        alert(resp && resp.error ? resp.error : 'Sign-up failed.');
+        return;
+      }
+      session.username = resp.username || raw.slice(0, 24);
+      session.isGuest = false;
+      session.authenticated = true;
+      session.savedProjects = Array.isArray(resp.savedProjects) ? resp.savedProjects : [];
+      sessionLabelEl.textContent = `Member: ${session.username}`;
       updateSavedProjectsUI();
+      if (session.lobbyId) joinLobby(session.lobbyId);
+    });
+  });
+
+  memberLoginBtnEl.addEventListener('click', () => {
+    const raw = usernameInputEl.value.trim();
+    const password = passwordInputEl.value;
+    if (!raw) {
+      alert('Enter your username.');
+      return;
     }
+    if (!password) {
+      alert('Enter your password.');
+      return;
+    }
+
+    socket.emit('auth_login', {
+      username: raw.slice(0, 24),
+      password,
+    }, (resp) => {
+      if (!resp || !resp.ok) {
+        alert(resp && resp.error ? resp.error : 'Log in failed.');
+        return;
+      }
+      session.username = resp.username || raw.slice(0, 24);
+      session.isGuest = false;
+      session.authenticated = true;
+      session.savedProjects = Array.isArray(resp.savedProjects) ? resp.savedProjects : [];
+      sessionLabelEl.textContent = `Member: ${session.username}`;
+      updateSavedProjectsUI();
+      if (session.lobbyId) joinLobby(session.lobbyId);
+    });
   });
 
   guestBtnEl.addEventListener('click', () => {
     session.username = randomGuestName();
     session.isGuest = true;
+    session.authenticated = false;
     sessionLabelEl.textContent = `Guest: ${session.username}`;
+    session.savedProjects = [];
     if (session.lobbyId) {
-      socket.emit('auth_update', {
-        username: session.username,
-        isGuest: true,
-      }, (resp) => {
-        if (!resp || !resp.ok) {
-          alert(resp && resp.error ? resp.error : 'Failed to switch account mode.');
-          return;
-        }
-        session.username = resp.username || session.username;
-        session.isGuest = true;
-        session.savedProjects = [];
-        sessionLabelEl.textContent = `Guest: ${session.username}`;
-        updateSavedProjectsUI();
-      });
+      joinLobby(session.lobbyId);
     } else {
-      session.savedProjects = [];
       updateSavedProjectsUI();
     }
   });

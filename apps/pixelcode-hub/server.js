@@ -1,6 +1,7 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const { Server } = require('socket.io');
 
@@ -162,6 +163,21 @@ function sanitizeUsername(input, fallback) {
 
 function randomGuestName() {
   return `Guest-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function hashPassword(password, salt) {
+  const pass = String(password || '');
+  const effectiveSalt = salt || crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(pass, effectiveSalt, 64).toString('hex');
+  return { salt: effectiveSalt, hash };
+}
+
+function verifyPassword(password, salt, hash) {
+  if (!salt || !hash) return false;
+  const candidate = crypto.scryptSync(String(password || ''), salt, 64);
+  const expected = Buffer.from(String(hash), 'hex');
+  if (candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
 }
 
 function titleForWindowType(type) {
@@ -691,6 +707,7 @@ io.on('connection', (socket) => {
   socket.data.lobbyId = null;
   socket.data.username = null;
   socket.data.isGuest = true;
+  socket.data.authenticated = false;
   if (deployBanner.active) {
     socket.emit('deployment_status', {
       active: true,
@@ -709,14 +726,15 @@ io.on('connection', (socket) => {
     leaveLobby(socket);
 
     const isGuest = Boolean(payload.isGuest);
-    const username = sanitizeUsername(payload.username, isGuest ? randomGuestName() : 'Member');
-
-    if (!isGuest && !dbCache.users[username]) {
-      dbCache.users[username] = {
-        username,
-        createdAt: Date.now(),
-      };
-      scheduleDbSave();
+    let username;
+    if (isGuest) {
+      username = sanitizeUsername(payload.username, randomGuestName());
+    } else {
+      if (!socket.data.authenticated || !socket.data.username) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Log in first.' });
+        return;
+      }
+      username = socket.data.username;
     }
 
     const user = {
@@ -770,16 +788,70 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('auth_register', (payload = {}, ack) => {
+    const username = sanitizeUsername(payload.username, '');
+    const password = String(payload.password || '');
+    if (!username || username.length < 2) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Username must be at least 2 characters.' });
+      return;
+    }
+    if (password.length < 4) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Password must be at least 4 characters.' });
+      return;
+    }
+    if (dbCache.users[username]) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Username already exists.' });
+      return;
+    }
+
+    const { salt, hash } = hashPassword(password);
+    dbCache.users[username] = {
+      username,
+      passwordSalt: salt,
+      passwordHash: hash,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    scheduleDbSave();
+
+    socket.data.username = username;
+    socket.data.isGuest = false;
+    socket.data.authenticated = true;
+    if (typeof ack === 'function') {
+      ack({ ok: true, username, savedProjects: getProjectsForUser(username) });
+    }
+  });
+
+  socket.on('auth_login', (payload = {}, ack) => {
+    const username = sanitizeUsername(payload.username, '');
+    const password = String(payload.password || '');
+    const user = dbCache.users[username];
+    if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Invalid username or password.' });
+      return;
+    }
+
+    socket.data.username = username;
+    socket.data.isGuest = false;
+    socket.data.authenticated = true;
+    if (typeof ack === 'function') {
+      ack({ ok: true, username, savedProjects: getProjectsForUser(username) });
+    }
+  });
+
   socket.on('auth_update', (payload = {}, ack) => {
     const requestedGuest = Boolean(payload.isGuest);
-    const requestedName = sanitizeUsername(payload.username, requestedGuest ? randomGuestName() : 'Member');
+    let requestedName;
 
-    if (!requestedGuest && !dbCache.users[requestedName]) {
-      dbCache.users[requestedName] = {
-        username: requestedName,
-        createdAt: Date.now(),
-      };
-      scheduleDbSave();
+    if (requestedGuest) {
+      requestedName = sanitizeUsername(payload.username, randomGuestName());
+      socket.data.authenticated = false;
+    } else {
+      if (!socket.data.authenticated || !socket.data.username) {
+        if (typeof ack === 'function') ack({ ok: false, error: 'Log in first.' });
+        return;
+      }
+      requestedName = socket.data.username;
     }
 
     socket.data.username = requestedName;
@@ -830,8 +902,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (socket.data.isGuest) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Guests cannot save projects.' });
+    if (socket.data.isGuest || !socket.data.authenticated || !socket.data.username) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Log in with a member account to save projects.' });
       return;
     }
 
@@ -858,8 +930,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (socket.data.isGuest) {
-      if (typeof ack === 'function') ack({ ok: false, error: 'Guests cannot reopen saved projects.' });
+    if (socket.data.isGuest || !socket.data.authenticated || !socket.data.username) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Log in with a member account to reopen projects.' });
       return;
     }
 
