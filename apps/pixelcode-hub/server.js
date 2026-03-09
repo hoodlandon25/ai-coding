@@ -799,17 +799,19 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Password must be at least 4 characters.' });
       return;
     }
-    if (dbCache.users[username]) {
+    const existing = dbCache.users[username];
+    if (existing && existing.passwordHash) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Username already exists.' });
       return;
     }
 
     const { salt, hash } = hashPassword(password);
     dbCache.users[username] = {
+      ...(existing || {}),
       username,
       passwordSalt: salt,
       passwordHash: hash,
-      createdAt: Date.now(),
+      createdAt: (existing && existing.createdAt) || Date.now(),
       updatedAt: Date.now(),
     };
     scheduleDbSave();
@@ -826,7 +828,15 @@ io.on('connection', (socket) => {
     const username = sanitizeUsername(payload.username, '');
     const password = String(payload.password || '');
     const user = dbCache.users[username];
-    if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+    if (!user) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Account not found. Sign up first.' });
+      return;
+    }
+    if (!user.passwordHash || !user.passwordSalt) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'This username needs a password. Use Sign Up to set one.' });
+      return;
+    }
+    if (!verifyPassword(password, user.passwordSalt, user.passwordHash)) {
       if (typeof ack === 'function') ack({ ok: false, error: 'Invalid username or password.' });
       return;
     }
