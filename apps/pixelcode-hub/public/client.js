@@ -118,6 +118,7 @@ let gestureKeys = {
   q: false,
   e: false,
 };
+let deploymentOverlayEl = null;
 
 const palette = ['#3ab97f', '#6ea8ff', '#ed8f44', '#d36be6', '#f4c542'];
 const DRAW_ON_PAGE_USERSCRIPT = `// ==UserScript==
@@ -434,6 +435,32 @@ function addGlobalLog(text) {
   row.textContent = `[${stamp}] ${text}`;
   globalConsoleEl.appendChild(row);
   globalConsoleEl.scrollTop = globalConsoleEl.scrollHeight;
+}
+
+function ensureDeploymentOverlay() {
+  if (deploymentOverlayEl && deploymentOverlayEl.isConnected) return deploymentOverlayEl;
+  const overlay = document.createElement('div');
+  overlay.className = 'deployment-overlay hidden';
+  const card = document.createElement('div');
+  card.className = 'deployment-overlay-card';
+  const title = document.createElement('div');
+  title.className = 'deployment-overlay-title';
+  title.textContent = 'Updating';
+  const msg = document.createElement('div');
+  msg.className = 'deployment-overlay-message';
+  msg.textContent = 'Updating...';
+  card.append(title, msg);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  deploymentOverlayEl = overlay;
+  return overlay;
+}
+
+function setDeploymentOverlay(active, message) {
+  const overlay = ensureDeploymentOverlay();
+  const msgEl = overlay.querySelector('.deployment-overlay-message');
+  if (msgEl) msgEl.textContent = String(message || 'Updating...');
+  overlay.classList.toggle('hidden', !active);
 }
 
 function buildControlsGuideHtml() {
@@ -3273,6 +3300,19 @@ function setupSocketHandlers() {
 
   socket.on('global_event', ({ text }) => {
     addGlobalLog(text);
+  });
+
+  socket.on('deployment_status', (payload = {}) => {
+    const active = Boolean(payload.active);
+    const message = String(payload.message || 'Updating...');
+    setDeploymentOverlay(active, message);
+  });
+
+  socket.on('admin_refresh', () => {
+    setDeploymentOverlay(true, 'Update complete. Refreshing...');
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 500);
   });
 
   socket.on('user_joined', (user) => {

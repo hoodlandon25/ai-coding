@@ -687,6 +687,39 @@ button:hover {
   margin-bottom: 6px;
 }
 
+.deployment-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 10, 18, 0.84);
+  backdrop-filter: blur(2px);
+}
+
+.deployment-overlay-card {
+  min-width: 280px;
+  max-width: 520px;
+  border: 1px solid #2c5c7b;
+  border-radius: 12px;
+  background: #102738;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  padding: 18px;
+  text-align: center;
+}
+
+.deployment-overlay-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.deployment-overlay-message {
+  color: #c9deec;
+  font-size: 0.95rem;
+}
+
 .chat-tabs {
   display: flex;
   gap: 6px;

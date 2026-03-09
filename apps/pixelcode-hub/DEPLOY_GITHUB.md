@@ -14,6 +14,7 @@ Your real-time Socket.io server must run on a backend host (Render, Railway, Fly
 - `PORT=3000` (or leave default platform port)
 - `CORS_ORIGIN=https://<your-github-username>.github.io`  
   If project page URL is used, include that full origin too.
+- `ADMIN_BROADCAST_KEY=<long-random-secret>`
 5. Confirm backend is live:
 - `https://<your-backend-domain>/healthz` should return `{ "ok": true }`.
 
@@ -39,3 +40,39 @@ Run backend locally:
 Then open:
 - `http://localhost:3000`
 
+## 5) One-command live update (shows Updating + auto refresh)
+Script:
+
+`apps/pixelcode-hub/scripts/publish_live.sh`
+
+Before running, export:
+
+```bash
+export GITHUB_TOKEN=...
+export RENDER_API_KEY=...
+export ADMIN_BROADCAST_KEY=...
+```
+
+Optional overrides:
+
+```bash
+export GITHUB_OWNER=hoodlandon25
+export GITHUB_REPO=ai-coding
+export GITHUB_WORKFLOW_ID=243383081
+export RENDER_SERVICE_ID=srv-d6n20r24d50c73d7pch0
+export BACKEND_URL=https://pixelcode-hub-backend.onrender.com
+```
+
+Run:
+
+```bash
+cd /home/hoodlandon25/ai-coding
+./apps/pixelcode-hub/scripts/publish_live.sh "Updating..." "chore: live update"
+```
+
+What it does:
+- Shows `Updating...` overlay to all connected users.
+- Commits and pushes your local changes.
+- Triggers GitHub Pages + Render deploy.
+- Waits for both deployments.
+- Sends refresh event so all clients reload automatically.

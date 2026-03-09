@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+app.use(express.json({ limit: '64kb' }));
 const corsOriginEnv = String(process.env.CORS_ORIGIN || '*').trim();
 const corsOrigin = corsOriginEnv === '*'
   ? '*'
@@ -18,6 +19,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const ADMIN_BROADCAST_KEY = String(process.env.ADMIN_BROADCAST_KEY || '').trim();
 const VALID_LOBBIES = ['lobby-1', 'lobby-2'];
 const WINDOW_TYPES = ['python', 'htmljs', 'userscript', 'drawing', 'dino', 'youtube', 'html-result'];
 const PROJECT_TYPES = new Set(['python', 'htmljs', 'userscript']);
@@ -28,10 +30,74 @@ const DB_PATH = path.join(DB_DIR, 'db.json');
 const lobbies = new Map(
   VALID_LOBBIES.map((lobbyId) => [lobbyId, createLobbyState()])
 );
+const deployBanner = {
+  active: false,
+  message: '',
+  updatedAt: 0,
+};
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/healthz', (_req, res) => {
   res.status(200).json({ ok: true });
+});
+
+function isAdminRequest(req) {
+  if (!ADMIN_BROADCAST_KEY) return false;
+  const token = String(req.header('x-admin-key') || '').trim();
+  return token === ADMIN_BROADCAST_KEY;
+}
+
+function broadcastDeployBanner() {
+  io.emit('deployment_status', {
+    active: deployBanner.active,
+    message: deployBanner.message,
+    updatedAt: deployBanner.updatedAt,
+  });
+}
+
+app.post('/admin/deploy/start', (req, res) => {
+  if (!isAdminRequest(req)) {
+    res.status(403).json({ ok: false, error: 'Forbidden' });
+    return;
+  }
+  const message = String((req.body && req.body.message) || 'Updating...').slice(0, 160);
+  deployBanner.active = true;
+  deployBanner.message = message || 'Updating...';
+  deployBanner.updatedAt = Date.now();
+  broadcastDeployBanner();
+  res.status(200).json({ ok: true, state: deployBanner });
+});
+
+app.post('/admin/deploy/finish', (req, res) => {
+  if (!isAdminRequest(req)) {
+    res.status(403).json({ ok: false, error: 'Forbidden' });
+    return;
+  }
+  const message = String((req.body && req.body.message) || 'Update complete. Refreshing...').slice(0, 160);
+  const refresh = Boolean(req.body && req.body.refresh);
+
+  deployBanner.active = false;
+  deployBanner.message = message;
+  deployBanner.updatedAt = Date.now();
+  io.emit('deployment_status', {
+    active: true,
+    message,
+    updatedAt: deployBanner.updatedAt,
+  });
+  if (refresh) {
+    io.emit('admin_refresh', {
+      reason: 'deploy_complete',
+      at: Date.now(),
+    });
+  }
+  setTimeout(() => {
+    deployBanner.active = false;
+    deployBanner.message = '';
+    deployBanner.updatedAt = Date.now();
+    broadcastDeployBanner();
+  }, 1200);
+
+  res.status(200).json({ ok: true, state: deployBanner, refresh });
 });
 
 let dbCache = {
@@ -625,6 +691,13 @@ io.on('connection', (socket) => {
   socket.data.lobbyId = null;
   socket.data.username = null;
   socket.data.isGuest = true;
+  if (deployBanner.active) {
+    socket.emit('deployment_status', {
+      active: true,
+      message: deployBanner.message,
+      updatedAt: deployBanner.updatedAt,
+    });
+  }
 
   socket.on('join_lobby', (payload = {}, ack) => {
     const lobbyId = payload.lobbyId;
