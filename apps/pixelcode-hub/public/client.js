@@ -1373,15 +1373,49 @@ function setupAuthAndLobbyControls() {
     session.username = raw.slice(0, 24);
     session.isGuest = false;
     sessionLabelEl.textContent = `Member: ${session.username}`;
-    updateSavedProjectsUI();
+    if (session.lobbyId) {
+      socket.emit('auth_update', {
+        username: session.username,
+        isGuest: false,
+      }, (resp) => {
+        if (!resp || !resp.ok) {
+          alert(resp && resp.error ? resp.error : 'Failed to switch account mode.');
+          return;
+        }
+        session.username = resp.username || session.username;
+        session.isGuest = Boolean(resp.isGuest);
+        session.savedProjects = Array.isArray(resp.savedProjects) ? resp.savedProjects : [];
+        sessionLabelEl.textContent = session.isGuest ? `Guest: ${session.username}` : `Member: ${session.username}`;
+        updateSavedProjectsUI();
+      });
+    } else {
+      updateSavedProjectsUI();
+    }
   });
 
   guestBtnEl.addEventListener('click', () => {
     session.username = randomGuestName();
     session.isGuest = true;
     sessionLabelEl.textContent = `Guest: ${session.username}`;
-    session.savedProjects = [];
-    updateSavedProjectsUI();
+    if (session.lobbyId) {
+      socket.emit('auth_update', {
+        username: session.username,
+        isGuest: true,
+      }, (resp) => {
+        if (!resp || !resp.ok) {
+          alert(resp && resp.error ? resp.error : 'Failed to switch account mode.');
+          return;
+        }
+        session.username = resp.username || session.username;
+        session.isGuest = true;
+        session.savedProjects = [];
+        sessionLabelEl.textContent = `Guest: ${session.username}`;
+        updateSavedProjectsUI();
+      });
+    } else {
+      session.savedProjects = [];
+      updateSavedProjectsUI();
+    }
   });
 
   for (const btn of document.querySelectorAll('.lobby-btn')) {
@@ -3319,6 +3353,16 @@ function setupSocketHandlers() {
     lobbyUsers.set(user.id, user);
     upsertAvatar(user);
     addGlobalLog(`${user.username} joined ${session.lobbyId || 'lobby'}.`);
+  });
+
+  socket.on('user_profile_updated', (payload = {}) => {
+    const existing = lobbyUsers.get(payload.id);
+    if (!existing) return;
+    existing.username = payload.username || existing.username;
+    existing.isGuest = Boolean(payload.isGuest);
+    existing.updatedAt = Number(payload.updatedAt) || Date.now();
+    lobbyUsers.set(existing.id, existing);
+    upsertAvatar(existing);
   });
 
   socket.on('chairs_updated', ({ chairs }) => {

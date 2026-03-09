@@ -770,6 +770,59 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('auth_update', (payload = {}, ack) => {
+    const requestedGuest = Boolean(payload.isGuest);
+    const requestedName = sanitizeUsername(payload.username, requestedGuest ? randomGuestName() : 'Member');
+
+    if (!requestedGuest && !dbCache.users[requestedName]) {
+      dbCache.users[requestedName] = {
+        username: requestedName,
+        createdAt: Date.now(),
+      };
+      scheduleDbSave();
+    }
+
+    socket.data.username = requestedName;
+    socket.data.isGuest = requestedGuest;
+    const savedProjects = requestedGuest ? [] : getProjectsForUser(requestedName);
+
+    const lobbyInfo = getLobbyFromSocket(socket);
+    if (lobbyInfo) {
+      const { lobbyId, lobbyState } = lobbyInfo;
+      const user = lobbyState.users.get(socket.id);
+      if (user) {
+        const oldName = user.username;
+        user.username = requestedName;
+        user.isGuest = requestedGuest;
+        user.updatedAt = Date.now();
+
+        io.to(lobbyId).emit('user_profile_updated', {
+          id: user.id,
+          username: user.username,
+          isGuest: user.isGuest,
+          updatedAt: user.updatedAt,
+        });
+
+        if (oldName !== requestedName) {
+          io.to(lobbyId).emit('global_event', {
+            level: 'info',
+            text: `${oldName} is now ${requestedName}`,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
+
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        username: requestedName,
+        isGuest: requestedGuest,
+        savedProjects,
+      });
+    }
+  });
+
   socket.on('project_save', (payload = {}, ack) => {
     const lobbyInfo = getLobbyFromSocket(socket);
     if (!lobbyInfo) {
