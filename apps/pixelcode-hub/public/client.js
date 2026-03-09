@@ -96,6 +96,8 @@ let idleTimer = null;
 let rafPending = false;
 let localZCounter = 50;
 const GRID_SIZE = 20;
+let lastCursorEmitAt = 0;
+let lastCursorPayloadKey = '';
 
 const avatarControl = {
   enabled: false,
@@ -996,29 +998,42 @@ function clearAllAvatars() {
   avatarMap.clear();
 }
 
-function sendCursorUpdate(state) {
+function sendCursorUpdate(state, force = false) {
   if (!session.lobbyId) return;
-  socket.emit('cursor_move', {
+  const payload = {
     x: pointerState.worldX,
     y: pointerState.worldY,
     state,
     facing: pointerState.facing,
     gesture: pointerState.gesture || 'none',
     mode: avatarControl.enabled ? 'avatar' : 'cursor',
-  });
+  };
+
+  const now = Date.now();
+  const minInterval = avatarControl.enabled ? 28 : 22;
+  const payloadKey = `${payload.x}|${payload.y}|${payload.state}|${payload.facing}|${payload.gesture}|${payload.mode}`;
+
+  if (!force) {
+    if (payloadKey === lastCursorPayloadKey && now - lastCursorEmitAt < 240) return;
+    if (now - lastCursorEmitAt < minInterval) return;
+  }
+
+  lastCursorEmitAt = now;
+  lastCursorPayloadKey = payloadKey;
+  socket.emit('cursor_move', payload);
 }
 
 function setWalkingThenIdle() {
   if (avatarControl.enabled) return;
-  pointerState.state = 'walking';
-  sendCursorUpdate('walking');
+      pointerState.state = 'walking';
+      sendCursorUpdate('walking');
 
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     const elapsed = Date.now() - lastMoveAt;
     if (elapsed >= 140) {
       pointerState.state = 'idle';
-      sendCursorUpdate('idle');
+      sendCursorUpdate('idle', true);
     }
   }, 160);
 }
@@ -3223,13 +3238,31 @@ function setupSocketHandlers() {
     const merged = { ...existing, ...user };
     lobbyUsers.set(user.id, merged);
     if (merged.id === session.selfId) {
-      pointerState.worldX = Number(merged.x) || pointerState.worldX;
-      pointerState.worldY = Number(merged.y) || pointerState.worldY;
+      const incomingX = Number(merged.x);
+      const incomingY = Number(merged.y);
+      const safeIncomingX = Number.isFinite(incomingX) ? incomingX : pointerState.worldX;
+      const safeIncomingY = Number.isFinite(incomingY) ? incomingY : pointerState.worldY;
+      const dx = safeIncomingX - pointerState.worldX;
+      const dy = safeIncomingY - pointerState.worldY;
+      const delta = Math.hypot(dx, dy);
+      const authoritativeSync = avatarControl.enabled
+        || merged.state === 'bump'
+        || merged.state === 'sitting'
+        || merged.state === 'jumping'
+        || Boolean(merged.onHeadOf)
+        || delta > 26;
+
+      if (authoritativeSync) {
+        pointerState.worldX = safeIncomingX;
+        pointerState.worldY = safeIncomingY;
+      }
       pointerState.state = merged.state || pointerState.state;
       pointerState.facing = merged.facing === 'left' ? 'left' : 'right';
       pointerState.gesture = merged.gesture === 'point-left' || merged.gesture === 'point-right' || merged.gesture === 'point-up'
         ? merged.gesture
         : 'none';
+      merged.x = pointerState.worldX;
+      merged.y = pointerState.worldY;
       if (merged.onHeadOf) {
         avatarControl.floorY = pointerState.worldY;
         avatarControl.vy = 0;
