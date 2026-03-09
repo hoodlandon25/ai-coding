@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PixelCode Hub - Full Build</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="left-panel">
+        <h1>PixelCode Hub</h1>
+
+        <section class="panel-block" id="authPanel">
+          <h2>Auth</h2>
+          <label for="usernameInput">Username</label>
+          <input id="usernameInput" type="text" maxlength="24" placeholder="Member username" />
+
+          <div class="button-row">
+            <button id="memberLoginBtn" type="button">Login / Sign-up</button>
+            <button id="guestBtn" type="button">Guest Mode</button>
+          </div>
+
+          <p class="meta" id="sessionLabel">Not signed in</p>
+        </section>
+
+        <section class="panel-block">
+          <h2>Lobbies</h2>
+          <div class="button-row">
+            <button class="lobby-btn" data-lobby="lobby-1" type="button">Lobby 1</button>
+            <button class="lobby-btn" data-lobby="lobby-2" type="button">Lobby 2</button>
+          </div>
+          <p class="meta" id="lobbyLabel">No lobby joined</p>
+        </section>
+
+        <section class="panel-block">
+          <h2>Organized Windows</h2>
+          <label for="categorySelect">Category</label>
+          <select id="categorySelect">
+            <option value="coding">Coding</option>
+            <option value="games">Games</option>
+            <option value="media">Media</option>
+          </select>
+
+          <label for="windowTypeSelect">Window Type</label>
+          <select id="windowTypeSelect"></select>
+
+          <div class="button-row">
+            <button id="spawnOrganizedBtn" type="button">Spawn Window</button>
+          </div>
+        </section>
+
+        <section class="panel-block">
+          <h2>Saved Projects</h2>
+          <select id="savedProjectSelect"></select>
+          <div class="button-row">
+            <button id="reopenProjectBtn" type="button">Reopen Selected</button>
+          </div>
+          <p class="meta">Guests cannot save or reopen projects.</p>
+        </section>
+
+        <section class="panel-block">
+          <h2>Controls Guide</h2>
+          <div class="button-row">
+            <button id="openControlsGuideBtn" type="button">Show All Controls</button>
+          </div>
+          <div id="controlsGuidePanel" class="controls-guide-panel hidden"></div>
+        </section>
+      </aside>
+
+      <main class="workspace-wrap">
+        <div id="workspace" class="workspace" aria-label="Lobby workspace">
+          <div class="workspace-grid"></div>
+          <div id="avatarLayer" class="avatar-layer"></div>
+          <div id="windowLayer" class="window-layer"></div>
+          <div class="workspace-hint">Run engines in windows and collaborate in real-time</div>
+        </div>
+      </main>
+    </div>
+
+    <section id="requestNotifications" class="request-notify-wrap">
+      <button id="requestNotifyBtn" class="request-notify-btn" type="button" aria-expanded="false">
+        Edit Requests
+        <span id="requestNotifyBadge" class="request-notify-badge hidden">0</span>
+      </button>
+      <div id="requestNotifyPanel" class="request-notify-panel hidden"></div>
+    </section>
+
+    <section id="globalConsoleWrap" class="global-console-wrap">
+      <div class="global-console-title">Global Console</div>
+      <div id="globalConsole" class="global-console"></div>
+    </section>
+
+    <section id="debugPanel" class="debug-panel hidden">
+      <h3>Debug & Test Panel</h3>
+      <button id="simulatePlayerBtn" type="button">Simulate Player</button>
+      <p class="meta">Bot joins current lobby, moves in a square, then requests edit.</p>
+    </section>
+
+    <script>
+      window.PIXELCODE_SOCKET_URL = window.PIXELCODE_SOCKET_URL || '';
+    </script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="./client.js"></script>
+  </body>
+</html>
